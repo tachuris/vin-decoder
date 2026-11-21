@@ -1,0 +1,1350 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title data-i18n="pageTitle">VIN Decoder — decode &amp; validate vehicle identification numbers</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080d18;
+      --bg-glow-a: rgba(91, 116, 255, 0.16);
+      --bg-glow-b: rgba(126, 74, 221, 0.12);
+      --surface: #101829;
+      --surface-2: #151f34;
+      --surface-3: #1b2740;
+      --border: #263451;
+      --border-soft: #1e2a43;
+      --text: #eaf0ff;
+      --muted: #9cabc9;
+      --faint: #7183a6;
+      --accent: #8aa4ff;
+      --accent-strong: #a9bcff;
+      --ok: #4adea3;
+      --bad: #fb7185;
+      --warn: #fbbf24;
+
+      --seg-wmi: #c4a4ff;
+      --seg-wmi-bg: rgba(167, 139, 250, 0.12);
+      --seg-wmi-bd: rgba(167, 139, 250, 0.42);
+      --seg-vds: #67e8f9;
+      --seg-vds-bg: rgba(34, 211, 238, 0.10);
+      --seg-vds-bd: rgba(34, 211, 238, 0.40);
+      --seg-check: #fcd34d;
+      --seg-check-bg: rgba(251, 191, 36, 0.11);
+      --seg-check-bd: rgba(251, 191, 36, 0.42);
+      --seg-year: #6ee7b7;
+      --seg-year-bg: rgba(52, 211, 153, 0.10);
+      --seg-year-bd: rgba(52, 211, 153, 0.40);
+      --seg-plant: #f9a8d4;
+      --seg-plant-bg: rgba(244, 114, 182, 0.10);
+      --seg-plant-bd: rgba(244, 114, 182, 0.38);
+      --seg-vis: #93c5fd;
+      --seg-vis-bg: rgba(96, 165, 250, 0.10);
+      --seg-vis-bd: rgba(96, 165, 250, 0.40);
+
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+      accent-color: var(--accent);
+      scrollbar-color: #344564 var(--bg);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    html {
+      min-width: 320px;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--sans);
+      font-size: 1rem;
+      line-height: 1.55;
+      color: var(--text);
+      background:
+        radial-gradient(60rem 40rem at 12% -10%, var(--bg-glow-a), transparent 70%),
+        radial-gradient(50rem 38rem at 92% 8%, var(--bg-glow-b), transparent 72%),
+        var(--bg);
+      background-attachment: fixed;
+    }
+
+    .skip-link {
+      position: absolute;
+      inset-inline-start: 1rem;
+      inset-block-start: -5rem;
+      z-index: 10;
+      padding: 0.7rem 1rem;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #0b1020;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .skip-link:focus {
+      inset-block-start: 1rem;
+    }
+
+    .visually-hidden:where(:not(:focus-within, :active)) {
+      position: absolute !important;
+      clip-path: inset(50%) !important;
+      overflow: hidden !important;
+      width: 1px !important;
+      height: 1px !important;
+      margin: -1px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      white-space: nowrap !important;
+    }
+
+    :where(a, button, input, summary):focus-visible {
+      outline: 3px solid var(--accent-strong);
+      outline-offset: 3px;
+    }
+
+    .wrap {
+      width: min(100% - 2rem, 68rem);
+      margin-inline: auto;
+    }
+
+    .site-header {
+      padding-block: 3.25rem 1.5rem;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0 0 0.75rem;
+      color: var(--accent-strong);
+      font-size: 0.75rem;
+      font-weight: 750;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      inline-size: 1.75rem;
+      block-size: 1px;
+      background: currentColor;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.1rem, 5vw, 3.4rem);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+      font-weight: 760;
+    }
+
+    h1 em {
+      font-style: normal;
+      background: linear-gradient(100deg, #a9bcff, #67e8f9 60%, #c4a4ff);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .lede {
+      max-width: 44rem;
+      margin: 0.9rem 0 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 2vw, 1.1rem);
+    }
+
+    main {
+      padding-block: 1rem 4rem;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: linear-gradient(160deg, rgba(255, 255, 255, 0.028), transparent 55%), var(--surface);
+      box-shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.85);
+      padding: clamp(1.25rem, 3vw, 2rem);
+    }
+
+    .card+.card {
+      margin-block-start: 1.5rem;
+    }
+
+    .card__title {
+      margin: 0 0 0.2rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .card__sub {
+      margin: 0 0 1.4rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .field label {
+      font-weight: 650;
+      margin-block-end: 0.35rem;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-block-end: 0.65rem;
+    }
+
+    .hint code {
+      font-family: var(--mono);
+      color: var(--accent-strong);
+      font-size: 0.9em;
+    }
+
+    .input-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+
+    #vin {
+      flex: 1 1 20rem;
+      min-inline-size: 0;
+      min-block-size: 54px;
+      padding: 0.8rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: max(1rem, 1em);
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+
+    #vin::placeholder {
+      color: var(--faint);
+      letter-spacing: 0.12em;
+    }
+
+    #vin:hover {
+      border-color: #344565;
+    }
+
+    #vin:user-invalid {
+      border-color: var(--bad);
+      box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.12);
+    }
+
+    #vin:user-valid {
+      border-color: rgba(74, 222, 163, 0.6);
+    }
+
+    .error-msg {
+      display: none;
+      margin-block-start: 0.6rem;
+      color: #ffb3bf;
+      font-size: 0.875rem;
+    }
+
+    .error-msg.is-visible {
+      display: flex;
+      gap: 0.45rem;
+      align-items: baseline;
+    }
+
+    .error-msg span[aria-hidden] {
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    button {
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .btn {
+      min-block-size: 50px;
+      padding: 0.75rem 1.35rem;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      font-weight: 700;
+      white-space: nowrap;
+      transition: transform 140ms ease, filter 140ms ease, background-color 140ms ease;
+    }
+
+    .btn--primary {
+      background: linear-gradient(135deg, #6f8cff, #9d7bf0);
+      color: #fff;
+      box-shadow: 0 10px 24px -12px rgba(111, 140, 255, 0.9);
+    }
+
+    .btn--primary:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .btn--quiet {
+      background: var(--surface-2);
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    .btn--quiet:hover {
+      color: var(--text);
+      background: var(--surface-3);
+    }
+
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      align-items: center;
+      margin-block-start: 1.25rem;
+      padding-block-start: 1.1rem;
+      border-block-start: 1px solid var(--border-soft);
+    }
+
+    .examples__label {
+      color: var(--faint);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-inline-end: 0.25rem;
+    }
+
+    .chip {
+      min-block-size: 40px;
+      padding: 0.5rem 0.85rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 0.83rem;
+      font-weight: 600;
+    }
+
+    .chip:hover {
+      color: var(--text);
+      border-color: var(--accent);
+      background: var(--surface-3);
+    }
+
+    .chip code {
+      font-family: var(--mono);
+      font-size: 0.95em;
+    }
+
+    .result__head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem 1rem;
+      align-items: center;
+      justify-content: space-between;
+      margin-block-end: 1.5rem;
+    }
+
+    .result__head h2 {
+      margin: 0;
+      font-size: clamp(1.15rem, 2.5vw, 1.5rem);
+      letter-spacing: -0.02em;
+    }
+
+    .result__head h2 code {
+      font-family: var(--mono);
+      font-size: 0.95em;
+      color: var(--accent-strong);
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .badge--ok {
+      color: #8ef0c4;
+      border-color: rgba(74, 222, 163, 0.4);
+      background: rgba(74, 222, 163, 0.1);
+    }
+
+    .badge--bad {
+      color: #ffb3bf;
+      border-color: rgba(251, 113, 133, 0.42);
+      background: rgba(251, 113, 133, 0.11);
+    }
+
+    .badge__icon {
+      font-size: 0.95em;
+      line-height: 1;
+    }
+
+    .section-label {
+      margin: 0 0 0.7rem;
+      color: var(--faint);
+      font-size: 0.74rem;
+      font-weight: 750;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .segments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-block-end: 2rem;
+    }
+
+    .seg {
+      padding: 0.7rem 0.8rem 0.85rem;
+      border-radius: 13px;
+      border: 1px solid var(--seg-bd);
+      background: var(--seg-bg);
+      min-inline-size: 0;
+    }
+
+    .seg.wmi {
+      --seg: var(--seg-wmi);
+      --seg-bd: var(--seg-wmi-bd);
+      --seg-bg: var(--seg-wmi-bg);
+    }
+
+    .seg.vds {
+      --seg: var(--seg-vds);
+      --seg-bd: var(--seg-vds-bd);
+      --seg-bg: var(--seg-vds-bg);
+    }
+
+    .seg.check {
+      --seg: var(--seg-check);
+      --seg-bd: var(--seg-check-bd);
+      --seg-bg: var(--seg-check-bg);
+    }
+
+    .seg.year {
+      --seg: var(--seg-year);
+      --seg-bd: var(--seg-year-bd);
+      --seg-bg: var(--seg-year-bg);
+    }
+
+    .seg.plant {
+      --seg: var(--seg-plant);
+      --seg-bd: var(--seg-plant-bd);
+      --seg-bg: var(--seg-plant-bg);
+    }
+
+    .seg.vis {
+      --seg: var(--seg-vis);
+      --seg-bd: var(--seg-vis-bd);
+      --seg-bg: var(--seg-vis-bg);
+    }
+
+    .seg.is-bad {
+      --seg: var(--bad);
+      --seg-bd: rgba(251, 113, 133, 0.55);
+      --seg-bg: rgba(251, 113, 133, 0.13);
+    }
+
+    .seg.is-ok {
+      --seg: var(--ok);
+      --seg-bd: rgba(74, 222, 163, 0.5);
+      --seg-bg: rgba(74, 222, 163, 0.11);
+    }
+
+    .seg__label {
+      display: flex;
+      gap: 0.75rem;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-block-end: 0.5rem;
+      color: var(--seg);
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .seg__range {
+      color: var(--faint);
+      font-family: var(--mono);
+      letter-spacing: 0;
+      font-weight: 600;
+      text-transform: none;
+    }
+
+    .seg__chars {
+      display: flex;
+      gap: 0.17rem;
+    }
+
+    .seg__char {
+      inline-size: 1.6rem;
+      block-size: 2.1rem;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      background: rgba(6, 11, 22, 0.42);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.98rem;
+      font-weight: 700;
+    }
+
+    .seg__char--check {
+      color: var(--seg);
+      border-color: var(--seg-bd);
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+    }
+
+    table {
+      inline-size: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    caption {
+      caption-side: top;
+      text-align: start;
+      padding: 0.9rem 1rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      border-block-end: 1px solid var(--border-soft);
+    }
+
+    th,
+    td {
+      padding: 0.8rem 1rem;
+      text-align: start;
+      vertical-align: top;
+      border-block-end: 1px solid var(--border-soft);
+    }
+
+    thead th {
+      color: var(--faint);
+      font-size: 0.72rem;
+      font-weight: 750;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    tbody th {
+      color: var(--text);
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    tbody tr:last-child th,
+    tbody tr:last-child td {
+      border-block-end: 0;
+    }
+
+    td.mono,
+    th.mono {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .swatch {
+      display: inline-block;
+      inline-size: 0.65rem;
+      block-size: 0.65rem;
+      border-radius: 3px;
+      margin-inline-end: 0.5rem;
+      background: var(--seg);
+      vertical-align: 0.02em;
+    }
+
+    .meaning {
+      color: var(--muted);
+    }
+
+    .meaning strong {
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .tiny {
+      color: var(--faint);
+      font-size: 0.82rem;
+    }
+
+    details {
+      margin-block-start: 1.5rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      background: var(--surface-2);
+    }
+
+    summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-block-size: 52px;
+      padding: 0.85rem 1.1rem;
+      border-radius: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .chev {
+      display: grid;
+      place-items: center;
+      inline-size: 1.7rem;
+      block-size: 1.7rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      color: var(--accent-strong);
+      font-size: 1.1rem;
+      line-height: 1;
+      transition: transform 160ms ease;
+    }
+
+    details[open] .chev {
+      transform: rotate(45deg);
+    }
+
+    .details__body {
+      padding: 0 1.1rem 1.25rem;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .details__body p {
+      color: var(--muted);
+      margin-block: 1rem 0.8rem;
+    }
+
+    .details__body code {
+      font-family: var(--mono);
+      color: var(--accent-strong);
+    }
+
+    .calc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+      gap: 0.6rem;
+      margin-block: 1rem;
+    }
+
+    .calc__item {
+      padding: 0.7rem 0.85rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+      background: var(--bg);
+    }
+
+    .calc__key {
+      display: block;
+      color: var(--faint);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .calc__val {
+      display: block;
+      font-family: var(--mono);
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-block-start: 0.2rem;
+    }
+
+    .calc__val.good {
+      color: var(--ok);
+    }
+
+    .calc__val.wrong {
+      color: var(--bad);
+    }
+
+    .site-footer {
+      padding-block: 1.5rem 2.5rem;
+      border-block-start: 1px solid var(--border-soft);
+      color: var(--faint);
+      font-size: 0.82rem;
+    }
+
+    .site-footer p {
+      margin: 0;
+    }
+
+    @media (max-width: 34rem) {
+      .seg__char {
+        inline-size: 1.5rem;
+        block-size: 2rem;
+        font-size: 0.9rem;
+      }
+
+      .btn {
+        flex: 1 1 100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      *,
+      *::before,
+      *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <a class="skip-link" href="#main" data-i18n="skipLink">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap">
+      <p class="eyebrow">ISO 3779</p>
+      <h1>VIN <em data-i18n="decoderTitle">Decoder</em></h1>
+      <p class="lede" data-i18n="lede">Decode a vehicle identification number into its segments, look up the model year,
+        and verify its check digit — entirely in your browser.</p>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    <section class="card" aria-labelledby="input-title">
+      <h2 class="card__title" id="input-title" data-i18n="decodeTitle">Decode a VIN</h2>
+      <p class="card__sub" data-i18n="decodeSub">Enter the 17-character code from the dashboard, door jamb, or
+        registration.</p>
+
+      <form id="vin-form" novalidate>
+        <div class="field">
+          <label for="vin" data-i18n="vinLabel">Vehicle identification number</label>
+          <span class="hint" id="vin-hint" data-i18n-html="vinHint">17 digits and capital letters. The letters
+            <code>I</code>, <code>O</code> and <code>Q</code> are never used.</span>
+          <div class="input-row">
+            <input id="vin" name="vin" type="text" inputmode="text" maxlength="17" pattern="[A-HJ-NPR-Z0-9]{17}"
+              required autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+              enterkeyhint="go" placeholder="ZFA250006TMD05472" aria-describedby="vin-hint" aria-invalid="false"
+              data-error="vin-error">
+            <button class="btn btn--primary" type="submit" data-i18n="decodeBtn">Decode VIN</button>
+            <button class="btn btn--quiet" type="reset" id="clear-btn" data-i18n="clearBtn">Clear</button>
+          </div>
+          <div class="error-msg" id="vin-error">
+            <span aria-hidden="true">✕</span>
+            <span data-i18n="errorMsg">Enter exactly 17 characters, using digits 0–9 and letters A–Z except I, O and
+              Q.</span>
+          </div>
+        </div>
+      </form>
+
+      <div class="examples">
+        <span class="examples__label" data-i18n="tryLabel">Try</span>
+        <button class="chip" type="button" data-vin="ZFA250006TMD05472">2026 Ducato
+          <code>ZFA250006TMD05472</code></button>
+        <button class="chip" type="button" data-vin="1HGCM82633A004352">2003 Accord
+          <code>1HGCM82633A004352</code></button>
+        <button class="chip" type="button" data-vin="ZFA250000M2X54321"><span data-i18n="exampleBadCheck">Bad check
+            digit</span>
+          <code>ZFA250000M2X54321</code></button>
+      </div>
+    </section>
+
+    <section class="card" id="result" aria-labelledby="result-title" hidden>
+      <div class="result__head">
+        <h2 id="result-title" tabindex="-1"><span data-i18n="decoded">Decoded </span><code id="result-vin"></code></h2>
+        <div class="badges">
+          <span class="badge" id="format-badge"><span class="badge__icon" aria-hidden="true">✓</span><span
+              data-i18n="formatValid">Format valid</span></span>
+          <span class="badge" id="check-badge"></span>
+        </div>
+      </div>
+
+      <h3 class="section-label" data-i18n="segmentsLabel">VIN segments</h3>
+      <div class="segments" id="segments"></div>
+
+      <div class="table-scroll">
+        <table id="meaning-table">
+          <caption data-i18n="meaningCaption">What each part means</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-i18n="thPositions">Positions</th>
+              <th scope="col" data-i18n="thSegment">Segment</th>
+              <th scope="col" data-i18n="thValue">Value</th>
+              <th scope="col" data-i18n="thMeaning">Meaning</th>
+            </tr>
+          </thead>
+          <tbody id="meaning-body"></tbody>
+        </table>
+      </div>
+
+      <details id="calc-details">
+        <summary><span data-i18n="calcHow">How the check digit is calculated</span><span class="chev"
+            aria-hidden="true">+</span></summary>
+        <div class="details__body">
+          <p data-i18n-html="calcP1">The 9th character is a validity check defined by ISO 3779 / FIPS 115-1. Convert
+            every character to a number, multiply by a fixed weight, and add the products. Divide the sum by 11: the
+            remainder is the check digit, with <code>10</code> written as <code>X</code>. Position 9 has weight
+            <code>0</code>, so its own value never changes the sum — it simply has to match the result.
+          </p>
+          <p data-i18n-html="calcP2">Digits keep their value. Letters are mapped as <code>A=1 … H=8</code>,
+            <code>J=1 … N=5</code>, <code>P=7</code>, <code>R=9</code>, <code>S=2 … Y=8</code>. <code>I</code>,
+            <code>O</code> and <code>Q</code> are excluded.
+          </p>
+
+          <div class="calc" id="calc-summary"></div>
+
+          <div class="table-scroll">
+            <table id="calc-table">
+              <caption id="calc-caption" data-i18n="calcArithmetic">Check-digit arithmetic</caption>
+              <thead>
+                <tr>
+                  <th scope="col" data-i18n="thPos">Pos</th>
+                  <th scope="col" data-i18n="thChar">Char</th>
+                  <th scope="col" data-i18n="thValue">Value</th>
+                  <th scope="col" data-i18n="thWeight">Weight</th>
+                  <th scope="col" data-i18n="thProduct">Product</th>
+                </tr>
+              </thead>
+              <tbody id="calc-body"></tbody>
+            </table>
+          </div>
+          <p class="tiny" data-i18n="tinyNote">WMI and model-year codes are standardized; the VDS, plant code and
+            serial number are defined by each manufacturer, so a full build-sheet decode requires the maker's own
+            database.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p data-i18n="footerNote">Runs locally — nothing is uploaded. WMI lookup is partial and informational.</p>
+    </div>
+  </footer>
+
+  <div class="visually-hidden" id="announcer" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const MESSAGES = {
+        en: {
+          pageTitle: "VIN Decoder — decode & validate vehicle identification numbers",
+          skipLink: "Skip to content",
+          decoderTitle: "Decoder",
+          lede: "Decode a vehicle identification number into its segments, look up the model year, and verify its check digit — entirely in your browser.",
+          decodeTitle: "Decode a VIN",
+          decodeSub: "Enter the 17-character code from the dashboard, door jamb, or registration.",
+          vinLabel: "Vehicle identification number",
+          vinHint: "17 digits and capital letters. The letters <code>I</code>, <code>O</code> and <code>Q</code> are never used.",
+          decodeBtn: "Decode VIN",
+          clearBtn: "Clear",
+          errorMsg: "Enter exactly 17 characters, using digits 0–9 and letters A–Z except I, O and Q.",
+          tryLabel: "Try",
+          exampleBadCheck: "Bad check digit",
+          decoded: "Decoded ",
+          formatValid: "Format valid",
+          segmentsLabel: "VIN segments",
+          meaningCaption: "What each part means",
+          thPositions: "Positions",
+          thSegment: "Segment",
+          thValue: "Value",
+          thMeaning: "Meaning",
+          calcHow: "How the check digit is calculated",
+          calcP1: "The 9th character is a validity check defined by ISO 3779 / FIPS 115-1. Convert every character to a number, multiply by a fixed weight, and add the products. Divide the sum by 11: the remainder is the check digit, with <code>10</code> written as <code>X</code>. Position 9 has weight <code>0</code>, so its own value never changes the sum — it simply has to match the result.",
+          calcP2: "Digits keep their value. Letters are mapped as <code>A=1 … H=8</code>, <code>J=1 … N=5</code>, <code>P=7</code>, <code>R=9</code>, <code>S=2 … Y=8</code>. <code>I</code>, <code>O</code> and <code>Q</code> are excluded.",
+          thPos: "Pos",
+          thChar: "Char",
+          thWeight: "Weight",
+          thProduct: "Product",
+          calcArithmetic: "Check-digit arithmetic",
+          tinyNote: "WMI and model-year codes are standardized; the VDS, plant code and serial number are defined by each manufacturer, so a full build-sheet decode requires the maker's own database.",
+          footerNote: "Runs locally — nothing is uploaded. WMI lookup is partial and informational.",
+          yearDigitNote: "Digit codes were used for 2001–2009.",
+          yearUnknown: "Unrecognized year code.",
+          yearNotEncoded: "Not encoded. Outside North America the model-year position is optional (ISO 3779); 0 is a filler, common on pre-1981 and European VINs.",
+          yearLetterNote: "Letter codes repeat every 30 years; nearest cycle to {{year}} shown.",
+          wmiUnknown: "Manufacturer code — not in the local WMI table.",
+          vdsFiat: "Manufacturer-specific descriptor. Fiat type {{code}} is commonly the {{type}}.",
+          vdsGeneric: "Manufacturer-specific model, body and engine descriptor.",
+          checkMeaning: "Computed {{expected}}; stored {{stored}}. {{verdict}}",
+          checkMatch: "They match.",
+          checkMismatch: "Mismatch — the VIN is likely mistyped.",
+          yearValueUnknown: "Unknown",
+          plantMeaning: "Assembly plant code, defined by the manufacturer.",
+          visMeaning: "Sequential production number assigned at the plant.",
+          checkDigitValid: "Check digit valid",
+          checkDigitInvalid: "Check digit invalid",
+          segWmiLabel: "WMI",
+          segWmiName: "World Manufacturer Identifier",
+          segVdsLabel: "VDS",
+          segVdsName: "Vehicle Descriptor Section",
+          segCheckLabel: "Check",
+          segCheckName: "Check digit",
+          segYearLabel: "Year",
+          segYearName: "Model year",
+          segPlantLabel: "Plant",
+          segPlantName: "Assembly plant",
+          segVisLabel: "VIS",
+          segVisName: "Vehicle Identifier Section",
+          calcArithmeticFor: "Check-digit arithmetic for {{vin}}",
+          sumProducts: "Sum of products",
+          sumMod: "Sum mod 11",
+          expectedCheck: "Expected check digit",
+          storedCheck: "Stored check digit",
+          announceValid: "VIN {{vin}} decoded. Check digit is valid.",
+          announceInvalid: "VIN {{vin}} decoded. Check digit is invalid; expected {{expected}} but found {{stored}}.",
+          invalidFormat: "Enter 17 characters using digits 0–9 and letters A–Z except I, O and Q."
+        },
+        es: {
+          pageTitle: "VIN Decodificado — decodifica y valida números de identificación de vehículos",
+          skipLink: "Ir al contenido",
+          decoderTitle: "Decodificado",
+          lede: "Decodifica un número de identificación de vehículo en sus segmentos, consulta el año del modelo y verifica el dígito verificador, todo en tu navegador.",
+          decodeTitle: "Decodificar un VIN",
+          decodeSub: "Introduce el código de 17 caracteres que aparece en el salpicadero, el marco de la puerta o la documentación.",
+          vinLabel: "Número de identificación del vehículo",
+          vinHint: "17 dígitos y letras mayúsculas. Las letras <code>I</code>, <code>O</code> y <code>Q</code> nunca se utilizan.",
+          decodeBtn: "Decodificar VIN",
+          clearBtn: "Borrar",
+          errorMsg: "Introduce exactamente 17 caracteres: dígitos del 0 al 9 y letras de la A a la Z, excepto I, O y Q.",
+          tryLabel: "Prueba",
+          exampleBadCheck: "Dígito verificador incorrecto",
+          decoded: "Decodificado ",
+          formatValid: "Formato válido",
+          segmentsLabel: "Segmentos del VIN",
+          meaningCaption: "Qué significa cada parte",
+          thPositions: "Posiciones",
+          thSegment: "Segmento",
+          thValue: "Valor",
+          thMeaning: "Significado",
+          calcHow: "Cómo se calcula el dígito verificador",
+          calcP1: "El noveno carácter es una comprobación de validez definida por ISO 3779 / FIPS 115-1. Convierte cada carácter en un número, multiplícalo por un peso fijo y suma los productos. Divide la suma entre 11: el resto es el dígito verificador, y <code>10</code> se escribe como <code>X</code>. La posición 9 tiene peso <code>0</code>, por lo que su valor no cambia la suma: solo debe coincidir con el resultado.",
+          calcP2: "Los dígitos conservan su valor. Las letras se asignan como <code>A=1 … H=8</code>, <code>J=1 … N=5</code>, <code>P=7</code>, <code>R=9</code>, <code>S=2 … Y=8</code>. Se excluyen <code>I</code>, <code>O</code> y <code>Q</code>.",
+          thPos: "Pos.",
+          thChar: "Carácter",
+          thWeight: "Peso",
+          thProduct: "Producto",
+          calcArithmetic: "Aritmética del dígito verificador",
+          tinyNote: "Los códigos WMI y del año del modelo están normalizados; el VDS, el código de planta y el número de serie los define cada fabricante, por lo que una decodificación completa de la ficha de fabricación requiere la base de datos del fabricante.",
+          footerNote: "Se ejecuta localmente: no se envía nada. La consulta WMI es parcial y tiene fines informativos.",
+          yearDigitNote: "Los códigos numéricos se usaron de 2001 a 2009.",
+          yearUnknown: "Código de año no reconocido.",
+          yearNotEncoded: "No codificado. Fuera de Norteamérica la posición del año del modelo es opcional (ISO 3779); el 0 es un relleno, habitual en VIN europeos y anteriores a 1981.",
+          yearLetterNote: "Los códigos de letra se repiten cada 30 años; se muestra el ciclo más cercano a {{year}}.",
+          wmiUnknown: "Código del fabricante — no figura en la tabla WMI local.",
+          vdsFiat: "Descriptor específico del fabricante. El tipo Fiat {{code}} suele corresponder al modelo {{type}}.",
+          vdsGeneric: "Descriptor de modelo, carrocería y motor específico del fabricante.",
+          checkMeaning: "Calculado {{expected}}; registrado {{stored}}. {{verdict}}",
+          checkMatch: "Coinciden.",
+          checkMismatch: "No coinciden. Es probable que el VIN esté mal escrito.",
+          yearValueUnknown: "Desconocido",
+          plantMeaning: "Código de la planta de ensamblaje, definido por el fabricante.",
+          visMeaning: "Número de producción secuencial asignado en la planta.",
+          checkDigitValid: "Dígito verificador válido",
+          checkDigitInvalid: "Dígito verificador no válido",
+          segWmiLabel: "WMI",
+          segWmiName: "Identificador Mundial del Fabricante",
+          segVdsLabel: "VDS",
+          segVdsName: "Sección de Descripción del Vehículo",
+          segCheckLabel: "Verif.",
+          segCheckName: "Dígito verificador",
+          segYearLabel: "Año",
+          segYearName: "Año del modelo",
+          segPlantLabel: "Planta",
+          segPlantName: "Planta de ensamblaje",
+          segVisLabel: "VIS",
+          segVisName: "Sección de Identificación del Vehículo",
+          calcArithmeticFor: "Aritmética del dígito verificador para {{vin}}",
+          sumProducts: "Suma de productos",
+          sumMod: "Suma módulo 11",
+          expectedCheck: "Dígito verificador esperado",
+          storedCheck: "Dígito verificador registrado",
+          announceValid: "VIN {{vin}} decodificado. El dígito verificador es válido.",
+          announceInvalid: "VIN {{vin}} decodificado. El dígito verificador no es válido; se esperaba {{expected}} y se encontró {{stored}}.",
+          invalidFormat: "Introduce 17 caracteres: dígitos del 0 al 9 y letras de la A a la Z, excepto I, O y Q."
+        }
+      };
+
+      const lang = (navigator.languages?.[0] || navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en";
+      const t = (key, vars) => {
+        const template = MESSAGES[lang][key] ?? MESSAGES.en[key] ?? key;
+        return template.replace(/\{\{(\w+)\}\}/g, (_, name) => vars?.[name] ?? "");
+      };
+
+      document.documentElement.lang = lang;
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        el.textContent = t(el.dataset.i18n);
+      });
+      document.querySelectorAll("[data-i18n-html]").forEach((el) => {
+        el.innerHTML = t(el.dataset.i18nHtml);
+      });
+
+      const COUNTRY_ES = {
+        Italy: "Italia",
+        Japan: "Japón",
+        Mexico: "México",
+        "France-registered WMI": "WMI registrado en Francia",
+        Germany: "Alemania",
+        "United States": "Estados Unidos",
+        Canada: "Canadá",
+        "South Korea": "Corea del Sur",
+        "United Kingdom": "Reino Unido"
+      };
+      const MAKE_ES = {
+        "Fiat 124 Spider (built by Mazda)": "Fiat 124 Spider (fabricado por Mazda)",
+        "Fiat vans (Stellantis)": "Furgonetas Fiat (Stellantis)",
+        "Ford (truck)": "Ford (camión)"
+      };
+
+      const TRANSLIT = {
+        A: 1, B: 2, C: 3, D: 4, E: 5, F: 6, G: 7, H: 8,
+        J: 1, K: 2, L: 3, M: 4, N: 5, P: 7, R: 9,
+        S: 2, T: 3, U: 4, V: 5, W: 6, X: 7, Y: 8, Z: 9
+      };
+      const WEIGHTS = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+      const VALID_FORMAT = /^[A-HJ-NPR-Z0-9]{17}$/;
+
+      const WMI = {
+        ZFA: { make: "Fiat", country: "Italy" },
+        ZFB: { make: "Fiat 500L / 500X (Stellantis)", country: "Italy" },
+        ZFD: { make: "Fiat Professional", country: "Italy" },
+        JC1: { make: "Fiat 124 Spider (built by Mazda)", country: "Japan" },
+        "3C3": { make: "Fiat (Chrysler de México)", country: "Mexico" },
+        VYF: { make: "Fiat (Stellantis)", country: "France-registered WMI" },
+        VXF: { make: "Fiat vans (Stellantis)", country: "France-registered WMI" },
+        VYC: { make: "Lancia (Stellantis)", country: "France-registered WMI" },
+        VYE: { make: "Jeep (Stellantis)", country: "France-registered WMI" },
+        VYS: { make: "Renault / Alpine (Ampere)", country: "France-registered WMI" },
+        WBA: { make: "BMW", country: "Germany" },
+        WBS: { make: "BMW M", country: "Germany" },
+        WDB: { make: "Mercedes-Benz", country: "Germany" },
+        WVW: { make: "Volkswagen", country: "Germany" },
+        WAU: { make: "Audi", country: "Germany" },
+        "1HG": { make: "Honda", country: "United States" },
+        "2HG": { make: "Honda", country: "Canada" },
+        "1FA": { make: "Ford", country: "United States" },
+        "1FT": { make: "Ford (truck)", country: "United States" },
+        "5YJ": { make: "Tesla", country: "United States" },
+        JTH: { make: "Lexus", country: "Japan" },
+        KNA: { make: "Kia", country: "South Korea" },
+        KMH: { make: "Hyundai", country: "South Korea" },
+        SAJ: { make: "Jaguar", country: "United Kingdom" },
+        SCA: { make: "Rolls-Royce", country: "United Kingdom" }
+      };
+
+      const FIAT_TYPES = {
+        "169": "Panda", "199": "Punto", "223": "Doblò",
+        "250": "Ducato", "312": "500 / 500C", "330": "500L"
+      };
+
+      const SEGMENTS = [
+        { key: "wmi", start: 0, end: 3, labelKey: "segWmiLabel", nameKey: "segWmiName" },
+        { key: "vds", start: 3, end: 8, labelKey: "segVdsLabel", nameKey: "segVdsName" },
+        { key: "check", start: 8, end: 9, labelKey: "segCheckLabel", nameKey: "segCheckName" },
+        { key: "year", start: 9, end: 10, labelKey: "segYearLabel", nameKey: "segYearName" },
+        { key: "plant", start: 10, end: 11, labelKey: "segPlantLabel", nameKey: "segPlantName" },
+        { key: "vis", start: 11, end: 17, labelKey: "segVisLabel", nameKey: "segVisName" }
+      ];
+
+      const form = document.getElementById("vin-form");
+      const input = document.getElementById("vin");
+      const error = document.getElementById("vin-error");
+      const result = document.getElementById("result");
+      const resultVin = document.getElementById("result-vin");
+      const resultTitle = document.getElementById("result-title");
+      const checkBadge = document.getElementById("check-badge");
+      const segmentsEl = document.getElementById("segments");
+      const meaningBody = document.getElementById("meaning-body");
+      const calcBody = document.getElementById("calc-body");
+      const calcSummary = document.getElementById("calc-summary");
+      const calcCaption = document.getElementById("calc-caption");
+      const announce = document.getElementById("announcer");
+
+      function vinFromUrl() {
+        return (new URLSearchParams(location.search).get("vin") || "").trim().toUpperCase();
+      }
+
+      function setVinInUrl(vin) {
+        const url = new URL(location.href);
+        if (vin) url.searchParams.set("vin", vin);
+        else url.searchParams.delete("vin");
+        try {
+          history.replaceState(history.state, "", url);
+        } catch {
+          /* Some browsers block history updates on file:// — decoding still works. */
+        }
+      }
+
+      const valueOf = (ch) => /\d/.test(ch) ? Number(ch) : TRANSLIT[ch];
+
+      function calculate(vin) {
+        const rows = [...vin].map((ch, i) => {
+          const value = valueOf(ch);
+          const weight = WEIGHTS[i];
+          return { pos: i + 1, char: ch, value, weight, product: value * weight };
+        });
+        const sum = rows.reduce((total, r) => total + r.product, 0);
+        const remainder = sum % 11;
+        const expected = remainder === 10 ? "X" : String(remainder);
+        const stored = vin[8];
+        return { rows, sum, remainder, expected, stored, valid: expected === stored };
+      }
+
+      function modelYear(code) {
+        if (code === "0") return { year: null, note: t("yearNotEncoded") };
+        if (/^[1-9]$/.test(code)) {
+          return { year: 2000 + Number(code), note: t("yearDigitNote") };
+        }
+        const letters = "ABCDEFGHJKLMNPRSTVWXY";
+        const index = letters.indexOf(code);
+        if (index < 0) return { year: null, note: t("yearUnknown") };
+        const now = new Date().getFullYear();
+        const candidates = [];
+        for (let year = 1980 + index; year <= 2090; year += 30) candidates.push(year);
+        const nearest = candidates.reduce((best, y) =>
+          Math.abs(y - now) < Math.abs(best - now) ? y : best, candidates[0]);
+        return { year: nearest, note: t("yearLetterNote", { year: now }) };
+      }
+
+      function element(tag, className, text) {
+        const el = document.createElement(tag);
+        if (className) el.className = className;
+        if (text !== undefined) el.textContent = text;
+        return el;
+      }
+
+      function row(cells, header) {
+        const tr = document.createElement("tr");
+        cells.forEach((content, i) => {
+          const cell = element(i === 0 && header ? "th" : "td", i >= 2 && header === "calc" ? "mono" : "");
+          if (i === 0 && header === "calc") cell.scope = "row";
+          if (i === 0 && header === "meaning") cell.scope = "row";
+          if (content instanceof Node) cell.append(content);
+          else cell.textContent = content;
+          tr.append(cell);
+        });
+        return tr;
+      }
+
+      function meaningFor(segment, vin, wmi, year, check) {
+        const value = vin.slice(segment.start, segment.end);
+        switch (segment.key) {
+          case "wmi": {
+            if (!wmi) return t("wmiUnknown");
+            const make = lang === "es" ? (MAKE_ES[wmi.make] ?? wmi.make) : wmi.make;
+            const country = lang === "es" ? (COUNTRY_ES[wmi.country] ?? wmi.country) : wmi.country;
+            return `${make} · ${country}`;
+          }
+          case "vds": {
+            const type = FIAT_TYPES[value.slice(0, 3)];
+            return type
+              ? t("vdsFiat", { code: value.slice(0, 3), type })
+              : t("vdsGeneric");
+          }
+          case "check":
+            return t("checkMeaning", {
+              expected: check.expected,
+              stored: check.stored,
+              verdict: t(check.valid ? "checkMatch" : "checkMismatch")
+            });
+          case "year":
+            return `${year.year ?? t("yearValueUnknown")} — ${year.note}`;
+          case "plant":
+            return t("plantMeaning");
+          default:
+            return t("visMeaning");
+        }
+      }
+
+      function render(vin, focus = true) {
+        const check = calculate(vin);
+        const wmi = WMI[vin.slice(0, 3)] || null;
+        const year = modelYear(vin[9]);
+
+        resultVin.textContent = vin;
+        checkBadge.className = "badge " + (check.valid ? "badge--ok" : "badge--bad");
+        checkBadge.replaceChildren(
+          element("span", "badge__icon", check.valid ? "✓" : "✕"),
+          element("span", "", t(check.valid ? "checkDigitValid" : "checkDigitInvalid"))
+        );
+
+        segmentsEl.replaceChildren();
+        meaningBody.replaceChildren();
+
+        SEGMENTS.forEach((segment) => {
+          const value = vin.slice(segment.start, segment.end);
+          const isCheck = segment.key === "check";
+          const box = element("div", "seg " + segment.key +
+            (isCheck ? (check.valid ? " is-ok" : " is-bad") : ""));
+          const label = element("div", "seg__label");
+          label.append(
+            element("span", "", t(segment.labelKey)),
+            element("span", "seg__range", `${segment.start + 1}–${segment.end}`)
+          );
+          const chars = element("div", "seg__chars");
+          [...value].forEach((ch) => chars.append(element("span",
+            "seg__char" + (isCheck ? " seg__char--check" : ""), ch)));
+          box.append(label, chars);
+          segmentsEl.append(box);
+
+          const nameCell = element("span");
+          const swatch = element("span", "swatch");
+          swatch.setAttribute("aria-hidden", "true");
+          swatch.style.background = getComputedStyle(box).getPropertyValue("--seg").trim();
+          nameCell.append(swatch, document.createTextNode(t(segment.nameKey)));
+          const valueCell = element("span", "mono", value);
+          const meaning = meaningFor(segment, vin, wmi, year, check);
+          const meaningCell = element("span", "meaning");
+          const dot = meaning.indexOf(". ");
+          const lead = dot === -1 ? meaning : meaning.slice(0, dot + 1);
+          const rest = dot === -1 ? "" : meaning.slice(dot + 2);
+          meaningCell.append(element("strong", "", lead));
+          if (rest) meaningCell.append(document.createTextNode(" " + rest));
+          meaningBody.append(row([
+            `${segment.start + 1}–${segment.end}`, nameCell, valueCell, meaningCell
+          ], "meaning"));
+        });
+
+        calcCaption.textContent = t("calcArithmeticFor", { vin });
+        calcBody.replaceChildren();
+        check.rows.forEach((r) => {
+          calcBody.append(row([String(r.pos), r.char, String(r.value), String(r.weight), String(r.product)], "calc"));
+        });
+
+        calcSummary.replaceChildren();
+        [
+          [t("sumProducts"), String(check.sum), ""],
+          [t("sumMod"), String(check.remainder), ""],
+          [t("expectedCheck"), check.expected, ""],
+          [t("storedCheck"), check.stored, check.valid ? "good" : "wrong"]
+        ].forEach(([key, value, tone]) => {
+          const item = element("div", "calc__item");
+          item.append(element("span", "calc__key", key), element("span", "calc__val " + tone, value));
+          calcSummary.append(item);
+        });
+
+        result.hidden = false;
+        setVinInUrl(vin);
+        announce.textContent = check.valid
+          ? t("announceValid", { vin })
+          : t("announceInvalid", { vin, expected: check.expected, stored: check.stored });
+        if (focus) resultTitle.focus({ preventScroll: true });
+      }
+
+      function showError(show) {
+        error.classList.toggle("is-visible", show);
+        input.setAttribute("aria-invalid", show ? "true" : "false");
+        const described = (input.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+        const withoutError = described.filter((id) => id !== "vin-error");
+        input.setAttribute("aria-describedby", (show ? [...withoutError, "vin-error"] : withoutError).join(" "));
+      }
+
+      function clearResult() {
+        result.hidden = true;
+        announce.textContent = "";
+        setVinInUrl("");
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const vin = input.value.trim().toUpperCase();
+        input.value = vin;
+        input.setCustomValidity("");
+        if (!VALID_FORMAT.test(vin)) {
+          input.setCustomValidity(t("invalidFormat"));
+          showError(true);
+          input.reportValidity();
+          return;
+        }
+        showError(false);
+        render(vin);
+      });
+
+      input.addEventListener("input", () => {
+        if (error.classList.contains("is-visible")) showError(false);
+        input.setCustomValidity("");
+      });
+
+      input.addEventListener("blur", () => {
+        const value = input.value.trim();
+        if (value && !VALID_FORMAT.test(value.toUpperCase())) showError(true);
+      });
+
+      form.addEventListener("reset", () => {
+        setTimeout(() => {
+          showError(false);
+          input.setCustomValidity("");
+          clearResult();
+        }, 0);
+      });
+
+      document.querySelectorAll(".chip").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          input.value = chip.dataset.vin;
+          showError(false);
+          input.setCustomValidity("");
+          render(chip.dataset.vin);
+        });
+      });
+
+      window.addEventListener("popstate", () => {
+        const vin = vinFromUrl();
+        input.value = vin;
+        input.setCustomValidity("");
+        showError(false);
+        if (VALID_FORMAT.test(vin)) render(vin, false);
+        else clearResult();
+      });
+
+      const initialVin = vinFromUrl();
+      if (initialVin) {
+        input.value = initialVin;
+        if (VALID_FORMAT.test(initialVin)) render(initialVin, false);
+        else showError(true);
+      }
+    })();
+  </script>
+</body>
+
+</html>
